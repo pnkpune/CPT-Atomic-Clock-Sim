@@ -80,27 +80,27 @@ NOISE_LABELS = {
 # Each entry: (key, label, default_value, unit, group)
 # ─────────────────────────────────────────────────────────────────────────────
 PARAMS = [
-    # Cell / Atomic
+    # Cell / Atomic  — GC25075-RB: 75 mm long × 25.4 mm OD → R = 12.7 mm
     ("T_C",            "Cell temperature",       45.0,   "°C",        "Cell"),
     ("P_N2_Torr",      "N₂ pressure",            0.0,    "Torr",      "Cell"),
     ("P_Ar_Torr",      "Ar pressure",            0.0,    "Torr",      "Cell"),
-    ("cell_R_mm",      "Cell radius",            26.0,   "mm",        "Cell"),
-    ("cell_L_mm",      "Cell length",            75.0,   "mm",        "Cell"),
+    ("cell_R_mm",      "Cell radius",            12.7,   "mm",        "Cell"),   # GC25075-RB OD=25.4mm → R=12.7mm
+    ("cell_L_mm",      "Cell length",            75.0,   "mm",        "Cell"),   # GC25075-RB
     ("B_mG",           "C-field (B₀)",           50.0,   "mGauss",    "Cell"),
-    # Laser / Optical
-    ("P_total_uW",     "Total laser power",      20.0,   "μW",        "Laser"),
+    # Laser / Optical  — C171TMD-B collimation, θ_1/e²=14.4°, w=1.55mm → d=3.1mm
+    ("P_total_uW",     "Total laser power",      25.0,   "μW",        "Laser"),  # power at cell (notes §4.2)
     ("mod_index",      "Mod. index m",           1.85,   "—",         "Laser"),
-    ("beam_diam_mm",   "Beam diameter",          3.8,    "mm",        "Laser"),
+    ("beam_diam_mm",   "Beam diameter",          3.1,    "mm",        "Laser"),  # C171TMD-B: f=6.2mm, θ=14.4° (notes §3)
     ("laser_detuning_MHz", "Laser detuning",     0.0,    "MHz",       "Laser"),
     ("laser_lw_MHz",   "VCSEL linewidth",        50.0,   "MHz",       "Laser"),
-    # Electronics
-    ("eta_QE",         "Photodiode QE (η)",      0.7,    "—",         "Electronics"),
-    ("RIN_dBHz",       "Laser RIN",              -135.0, "dBc/Hz",    "Electronics"),
-    ("LO_PN_dBcHz",    "LO phase noise",         -115.0, "dBc/Hz",    "Electronics"),
-    ("servo_bw_Hz",    "FM servo freq.",          100.0, "Hz",        "Electronics"),
-    ("NEP_W_rtHz",     "Photodetector NEP",       1e-12, "W/√Hz",     "Electronics"),
+    # Electronics  — PDA36A2 + ADF4356 eval board + Red Pitaya 125-14
+    ("eta_QE",         "Photodiode QE (η)",      0.70,   "—",         "Electronics"),  # R=0.45 A/W @795nm → η≈0.70
+    ("RIN_dBHz",       "Laser RIN",              -125.0, "dBc/Hz",    "Electronics"),  # VCSEL typ. (notes §6.2)
+    ("LO_PN_dBcHz",    "LO phase noise",         -115.0, "dBc/Hz",    "Electronics"),  # ADF4356 @100kHz offset
+    ("servo_bw_Hz",    "FM servo freq.",          100.0,  "Hz",        "Electronics"),
+    ("NEP_W_rtHz",     "Photodetector NEP",       3.2e-12,"W/√Hz",    "Electronics"),  # PDA36A2 ~50dB gain (notes §6.3)
     # Environment / Noise
-    ("sigma_T_mK",     "Temp. stability",         1.0,   "mK",        "Environment"),
+    ("sigma_T_mK",     "Temp. stability",         1.0,   "mK",        "Environment"),  # ±1 mK cell control
     ("tau_thermal_s",  "Thermal time const.",     10.0,  "s",         "Environment"),
     ("sigma_B_uG",     "B-field noise σ_B",       5.0,   "μGauss",    "Environment"),
     ("Delta_P_atm_mbar","Atm. press. deviation",   0.0,  "mbar",      "Environment"),
