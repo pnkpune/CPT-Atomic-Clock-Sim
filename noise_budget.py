@@ -617,12 +617,22 @@ def total_noise_budget(tau: np.ndarray, params: dict) -> dict:
     sigma_elec  = electronics_noise_sigma(
         tau, pc["NEP_W_rtHz"], pc["P_det_W"], pc["gamma_CPT_Hz"], pc["contrast"])
 
-    # Flicker noise floor (1/f, τ-independent) — light-shift drift, etalon drift,
-    # optical-feedback, analog gain drift, polarisation drift.
-    # Default 4×10⁻⁹ for a bare open-cell VCSEL CPT clock (notes §7).
-    # Set to smaller value (e.g. 5e-13) for a fully engineered or buffer-gas clock.
+    # Flicker noise floor (1/f, τ-independent) — laser frequency jitter,
+    # electronics 1/f noise, demodulation artifacts.
+    #
+    # NOTE: The overall long-term stability limit (e.g. "few × 10⁻⁹" from
+    # notes §7) comes from DRIFT (light-shift, etalon, optical feedback,
+    # analog gain drift), NOT from flicker frequency noise.  Drift is handled
+    # separately by sigma_drift below, and grows as τ.  The flicker floor
+    # here represents the *irreducible* τ-independent noise from 1/f processes.
+    #
+    # Default 1×10⁻¹⁰ for an open-cell VCSEL CPT clock:
+    #   • Crossover with white noise (6×10⁻¹⁰ at 1s) at τ ≈ 36 s
+    #   • Gives visible τ⁻¹/² slope from 1–30 s on the Allan deviation plot
+    #   • Then flat at ~1e-10 until drift takes over at longer τ
+    # Set to 5e-13 for a well-engineered buffer-gas clock.
     sigma_flicker = flicker_noise_sigma(
-        tau, pc.get("sigma_y_flicker_floor", 4e-9))
+        tau, pc.get("sigma_y_flicker_floor", 1e-10))
 
     if "glass_thickness_mm" in pc:
         drift_he = helium_permeation_drift(
