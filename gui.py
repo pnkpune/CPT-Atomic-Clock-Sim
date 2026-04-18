@@ -80,23 +80,23 @@ NOISE_LABELS = {
 # Each entry: (key, label, default_value, unit, group)
 # ─────────────────────────────────────────────────────────────────────────────
 PARAMS = [
-    # Cell / Atomic (CSAC dimensions)
-    ("T_C",            "Cell temperature",       75.0,   "°C",        "Cell"),
-    ("P_N2_Torr",      "N₂ pressure",            20.0,   "Torr",      "Cell"),
-    ("P_Ar_Torr",      "Ar pressure",            34.0,   "Torr",      "Cell"),
-    ("cell_R_mm",      "Cell radius",            1.5,    "mm",        "Cell"),
-    ("cell_L_mm",      "Cell length",            3.0,    "mm",        "Cell"),
+    # Cell / Atomic
+    ("T_C",            "Cell temperature",       45.0,   "°C",        "Cell"),
+    ("P_N2_Torr",      "N₂ pressure",            0.0,    "Torr",      "Cell"),
+    ("P_Ar_Torr",      "Ar pressure",            0.0,    "Torr",      "Cell"),
+    ("cell_R_mm",      "Cell radius",            26.0,   "mm",        "Cell"),
+    ("cell_L_mm",      "Cell length",            75.0,   "mm",        "Cell"),
     ("B_mG",           "C-field (B₀)",           50.0,   "mGauss",    "Cell"),
     # Laser / Optical
-    ("P_total_uW",     "Total laser power",      15.0,   "μW",        "Laser"),
+    ("P_total_uW",     "Total laser power",      20.0,   "μW",        "Laser"),
     ("mod_index",      "Mod. index m",           1.85,   "—",         "Laser"),
-    ("beam_diam_mm",   "Beam diameter",          2.0,    "mm",        "Laser"),
+    ("beam_diam_mm",   "Beam diameter",          3.8,    "mm",        "Laser"),
     ("laser_detuning_MHz", "Laser detuning",     0.0,    "MHz",       "Laser"),
     ("laser_lw_MHz",   "VCSEL linewidth",        50.0,   "MHz",       "Laser"),
     # Electronics
     ("eta_QE",         "Photodiode QE (η)",      0.7,    "—",         "Electronics"),
     ("RIN_dBHz",       "Laser RIN",              -135.0, "dBc/Hz",    "Electronics"),
-    ("LO_PN_dBcHz",    "LO phase noise",         -130.0, "dBc/Hz",    "Electronics"),
+    ("LO_PN_dBcHz",    "LO phase noise",         -115.0, "dBc/Hz",    "Electronics"),
     ("servo_bw_Hz",    "FM servo freq.",          100.0, "Hz",        "Electronics"),
     ("NEP_W_rtHz",     "Photodetector NEP",       1e-12, "W/√Hz",     "Electronics"),
     # Environment / Noise
@@ -104,9 +104,9 @@ PARAMS = [
     ("tau_thermal_s",  "Thermal time const.",     10.0,  "s",         "Environment"),
     ("sigma_B_uG",     "B-field noise σ_B",       5.0,   "μGauss",    "Environment"),
     ("Delta_P_atm_mbar","Atm. press. deviation",   0.0,  "mbar",      "Environment"),
-    ("glass_thickness_mm", "Glass thickness", 0.5,  "mm",        "Environment"),
-    ("vcsel_aging_rate",   "Laser aging rate",   1.0,  "ppm/day",   "Environment"),
-    ("rb_reaction_rate",   "Rb reaction rate",   0.5,  "ppm/day",   "Environment"),
+    ("glass_thickness_mm", "Glass thickness",     0.5,   "mm",        "Environment"),
+    ("vcsel_aging_rate",   "Laser aging rate",    1.0,   "ppm/day",   "Environment"),
+    ("rb_reaction_rate",   "Rb reaction rate",    0.5,   "ppm/day",   "Environment"),
 ]
 
 # ─────────────────────────────────────────────────────────────────────────────
