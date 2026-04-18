@@ -1,4 +1,4 @@
-pyenv rehash"""
+"""
 noise_budget.py
 ===============
 Noise power spectral densities (PSDs) and frequency instability contributions
