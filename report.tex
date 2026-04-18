@@ -1,0 +1,207 @@
+\documentclass[11pt,a4paper]{article}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{amsmath, amssymb, amsfonts}
+\usepackage{graphicx}
+\usepackage{hyperref}
+\usepackage{geometry}
+\usepackage{booktabs}
+\usepackage{cite}
+\usepackage{siunitx}
+
+\geometry{margin=1in}
+
+\title{\textbf{Comprehensive Performance Model of a CPT $^{87}$Rb Atomic Clock}}
+\author{CPT Clock Modelling Suite}
+\date{\today}
+
+\begin{document}
+
+\maketitle
+
+\begin{abstract}
+This document details the comprehensive physical model and software implementation of a Continuous Wave Coherent Population Trapping (CW-CPT) atomic clock based on $^{87}$Rb vapor and a buffer gas mixture of Argon and Nitrogen. The model predicts the exact dark resonance lineshape, integrates six mechanisms of systematic frequency shifts, and calculates an absolute noise budget (Allan deviation) incorporating optical, electrical, and environmental noise sources. All analytical mechanisms are derived from established primary literature, ensuring a physically grounded performance prediction for next-generation frequency standards.
+\end{abstract}
+
+\tableofcontents
+\vspace{1em}
+
+\section{Introduction}
+Coherent Population Trapping (CPT) leverages two phase-coherent optical fields to drive a $\Lambda$-type three-level atomic system into a non-absorbing ``dark state''. In $^{87}$Rb, the clock transition ($\nu_0 = 6,834,682,610.904$~Hz) occurs between the ground state hyperfine levels $|F=1, m_F=0\rangle$ and $|F=2, m_F=0\rangle$ \cite{Steck2021}. The CPT resonance provides a high-Q frequency discriminator for atomic clocks, enabling significant miniaturization \cite{Zhu1993, Knappe2004}.
+
+\section{Atomic Vapor and Cell Physics}
+\subsection{Density and Vapor Pressure}
+The modeling begins with the physical properties of the atomic vapor. The $^{87}$Rb saturation vapor pressure $P_v$ (in Pa) is determined using the Nesmeyanov relation \cite{Steck2021, Alcock1984}:
+\begin{equation}
+\log_{10}(P_v) = A - \frac{B}{T}
+\end{equation}
+where $A \approx 9.3$ and $B \approx 4040$~K for liquid Rb. The atomic number density is then $n_{Rb} = P_v / (k_B T)$.
+
+\subsection{Ground-State Decoherence}
+The width and contrast of the CPT signal are limited by the ground-state coherence relaxation rate $\gamma_2$ (total dephasing rate). In the collision-limited regime, $\gamma_2$ is the sum of three dominant contributions \cite{Vanier2005, Vanier1989}:
+\begin{equation}
+    \gamma_2 = \gamma_{diff} + \gamma_{se} + \gamma_{bg}
+\end{equation}
+where $\gamma_{diff}$ is the wall-collision rate, $\gamma_{se}$ is the spin-exchange rate, and $\gamma_{bg}$ is the buffer-gas phase-perturbation rate.
+
+\textbf{1. Diffusion Broadening:} For a cylindrical vapor cell, the diffusion of rubidium atoms to the walls is modeled rigorously using the diffusion equation. The relaxation rate for the fundamental diffusion mode is given by \cite{Bouchiat1966, Vanier2005, Franz1976}:
+\begin{equation}
+    \gamma_{diff} = D(T, P) \left[ \left(\frac{j_{01}}{R}\right)^2 + \left(\frac{\pi}{L}\right)^2 \right]
+\end{equation}
+where $j_{01} \approx 2.4048$ is the first zero of the Bessel function $J_0$.
+
+\textbf{2. Spin-Exchange Broadening:} Rb-Rb collisions exchange electron spins, limiting coherence at high temperatures:
+\begin{equation}
+    \gamma_{se} = n_{Rb} v_{rel} \sigma_{se}
+\end{equation}
+where $\sigma_{se} \approx 2 \times 10^{-14}$~cm$^2$ is the spin-exchange cross-section \cite{Vanier2005}.
+
+\textbf{3. Buffer Gas Collisions:} Interaction with buffer gas atoms causes phase perturbations. Using coefficients from \cite{Kozlova2011, Franz1976}:
+\begin{equation}
+    \gamma_{bg} = N_0 \sigma_{coll} v_{rel} \left( \frac{p}{p_0} \right)
+\end{equation}
+
+\section{Optical Interrogation}
+\subsection{VCSEL Modulation}
+A Vertical Cavity Surface Emitting Laser (VCSEL) is directly current-modulated at $\nu_0/2$ to generate the two coherent optical frequencies required for CPT. The optical field $E(t)$ is phase/frequency modulated, creating a spectrum of sidebands whose amplitudes scale with Bessel functions $J_k(m)$, where $m$ is the modulation index \cite{Shah2010}:
+\begin{equation}
+    P_k = P_{total} \, J_k(m)^2
+\end{equation}
+The optimum modulation index to maximize power in the first-order sidebands ($k=\pm 1$) while minimizing AC Stark shifts is approximately $m \approx 1.85$ to $2.4$ \cite{Shah2010}.
+
+\subsection{CPT Resonance Lineshape}
+Instead of a simple Lorentzian dip, the optical transmission $T(\delta, B)$ through an optically dense atomic vapor is modeled using an exponential absorption profile that accounts for the overlapping Zeeman manifold. The normalized transmitted power as a function of the two-photon detuning $\delta$ and the applied static magnetic field $B$ is given by:
+\begin{equation}
+T(\delta, B) = T_{bg} \exp \left( \beta \sum_{j \in \{-1, 0, 1\}} \frac{w_j}{(\delta - j \xi B)^2 + (\gamma_{CPT}/2)^2} \right)
+\end{equation}
+Where the variables are formally defined as follows:
+\begin{itemize}
+    \item $T_{bg}$ is the off-resonant background transmission.
+    \item $w_j$ represents the relative transition weights for the $\Delta m_F = -1, 0, +1$ CPT resonances ($w_{-1}=0.5, w_0=1.0, w_{+1}=0.5$).
+    \item $\xi$ is the approximate first-order Zeeman splitting coefficient ($\sim 700$~kHz/G).
+    \item $\gamma_{CPT}$ is the power-broadened full-width at half-maximum (FWHM) of the resonance:
+    \begin{equation}
+    \gamma_{CPT} = 2\gamma_2 + \frac{\Omega^2}{\Gamma^*}
+    \end{equation}
+    \item $\beta$ is a normalization constant derived to ensure that the theoretical maximum contrast $C$ is accurately achieved at resonance ($\delta = 0$) in a zero-field condition ($B = 0$):
+    \begin{equation}
+    \beta = \frac{\ln(1 - C)}{\sum_{j} w_j / (\gamma_{CPT}/2)^2}
+    \end{equation}
+\end{itemize}
+The discriminator slope $D$ used for frequency locking is derived from the central derivative:
+\begin{equation}
+D = \left| \frac{dT}{d\delta} \right|_{\max} \approx \frac{C \cdot T_{bg}}{2 \gamma_{CPT}}
+\end{equation}
+
+\section{Systematic Frequency Shifts}
+\subsection{Buffer Gas Shift and Inversion}
+Collisions with the Ar/N$_2$ buffer gas mixture cause a significant temperature-dependent shift \cite{Vanier2005, Kozlova2011}:
+\begin{equation}
+\Delta\nu_{bg}(T, P) = \sum P_j \left[ \beta_{0,j} + \beta_{1,j} (T-T_0) + \beta_{2,j} (T-T_0)^2 \right]
+\end{equation}
+Because $\beta_1$ is positive for N$_2$ and negative for Ar, an appropriately chosen partial pressure ratio creates a parabolic temperature dependence with a zero-derivative inversion point ($T_{inv}$). The inversion temperature is derived as:
+\begin{equation}
+T_{inv} = T_0 - \frac{P_{Ar} \beta_{1,Ar} + P_{N_2} \beta_{1,N_2}}{2(P_{Ar} \beta_{2,Ar} + P_{N_2} \beta_{2,N_2})}
+\end{equation}
+where $T_0 = 273.15$~K and $\beta_{1,j}, \beta_{2,j}$ are literature coefficients for gas $j$ \cite{Kozlova2011}.
+
+\subsection{Second-Order Zeeman Shift}
+The clock operates on the field-insensitive $m_F=0 \to m_F=0$ transition. The second-order shift derived from the Breit-Rabi formula is \cite{Vanier1989}:
+\begin{equation}
+\Delta\nu_{Z2} = K_Z B^2
+\end{equation}
+where $K_Z = 575.152$~Hz/G$^2$ is the quadratic Zeeman coefficient for the $^{87}$Rb clock transition \cite{Vanier1989}.
+
+\subsection{Spin-Exchange Shift}
+Collisions between $^{87}$Rb atoms in the vapor cell induce a density-dependent frequency shift \cite{Allard2004}:
+\begin{equation}
+\Delta\nu_{se} = \kappa_{se} n_{Rb}
+\end{equation}
+where $\kappa_{se}$ is the spin-exchange shift parameter and $n_{Rb}$ is the temperature-dependent atomic number density.
+
+\subsection{Blackbody Radiation (BBR) Shift}
+The thermal electromagnetic environment of the cell cavity shifts the ground-state hyperfine splitting \cite{Bize1999}:
+\begin{equation}
+\Delta\nu_{BBR} = \nu_0 \beta_{BBR} \left( \frac{T}{T_{ref}} \right)^4 \left[ 1 + \epsilon \left( \frac{T}{T_{ref}} \right)^2 \right]
+\end{equation}
+where $T_{ref} = 300$~K, $\beta_{BBR} = 1.26 \times 10^{-14}$, and $\epsilon = 0.013$ is the dynamic correction factor.
+
+\subsection{Barometric Shift}
+Fluctuations in atmospheric pressure ($\Delta P_{atm}$) compress the glass envelope of the vapor cell, altering the internal buffer gas conditions \cite{Moreno2018}:
+\begin{equation}
+\Delta\nu_{baro} = K_{baro} \Delta P_{atm}
+\end{equation}
+where $K_{baro}$ is the barometric shift coefficient, typically $\sim 10^{-12} / \text{mbar}$ for standard borosilicate cells.
+
+\subsection{AC Stark (Light) Shift}
+The optical fields interrogating the clock transition uniquely perturb the energy levels, causing a power- and detuning-dependent AC Stark shift \cite{Shah2010, Levi2000}.
+\begin{equation}
+\Delta\nu_{LS} = \left[ \alpha_{eff}(m) + \beta_{LS} \text{Im}[W(\Delta)] \right] \cdot I_{total}
+\end{equation}
+where $\alpha_{eff}(m)$ incorporates the sideband-weighting from the VCSEL modulation, and the dispersive term $\beta_{LS}$ relies on the Faddeeva function $W(\Delta)$ for the optical detuning profile. By carefully tuning the VCSEL modulation index ($m \approx 2.4$), the contributions from the carrier and higher-order sidebands mutually cancel the shift induced by the first-order sidebands \cite{Shah2006}.
+
+\section{Noise Budget and Frequency Stability}
+The short-term frequency instability is quantified by the fractional Allan deviation $\sigma_y(\tau)$:
+\begin{equation}
+\sigma_{y,total}(\tau) = \sqrt{\sigma_{shot}^2 + \sigma_{RIN}^2 + \sigma_{FM}^2 + \sigma_{PM}^2 + \sigma_{T}^2 + \sigma_{B}^2 + \sigma_{elec}^2 + \sigma_{drift}^2}
+\end{equation}
+Primary short-term components (scaling as $\tau^{-1/2}$) include:
+\begin{itemize}
+    \item \textbf{Shot Noise:} $\sigma_{shot}(\tau) = \frac{1}{\nu_0} \frac{\gamma_{CPT}}{2 C} \sqrt{\frac{h\nu}{\eta P_{det}}} \tau^{-1/2}$ \cite{Wynands1999}.
+    \item \textbf{Laser RIN:} $\sigma_{RIN}(\tau) = \frac{1}{\nu_0} \frac{\gamma_{CPT}}{2 C} \sqrt{S_{RIN}(f_{mod})} \tau^{-1/2}$ \cite{Vanier2005}.
+    \item \textbf{LO FM Noise:} $\sigma_{FM}(\tau)$ arises from the microwave local oscillator frequency noise converting to clock error via the CPT discriminator slope \cite{Audoin1998}:
+    \begin{equation}
+    \sigma_{FM}(\tau) = \frac{\gamma_{CPT}}{2 C \nu_0} \sqrt{S_{\phi}(f_{m})} \cdot \tau^{-1/2}
+    \end{equation}
+    where $S_{\phi}(f_{m})$ is the single-sideband phase noise PSD [rad$^2$/Hz] of the LO at the servo offset frequency $f_m$. Note: this is driven by the \emph{microwave} LO, not the VCSEL optical linewidth.
+    \item \textbf{PM-to-AM Conversion:} $\sigma_{PM}(\tau)$ arises from conversion of laser phase noise to amplitude noise via the dispersive atomic line \cite{Camparo1999}. The contribution of this "Camparo effect" is given by:
+    \begin{equation}
+    \sigma_{PM-AM}(\tau) = \frac{1}{\nu_0} \frac{\gamma_{CPT}}{2C} \left| \frac{1}{T_{bg}} \frac{\partial T_{bg}}{\partial \nu_{opt}} \right| \sqrt{ \frac{\Delta\nu_L}{\pi} } \tau^{-1/2}
+    \end{equation}
+    where $\Delta\nu_L$ is the intrinsic full-width at half-maximum (FWHM) linewidth of the laser diode, and $\partial T_{bg} / \partial \nu_{opt}$ is the slope of the optical absorption profile evaluated at the operating optical detuning.
+    \item \textbf{Magnetic Field Fluctuation Noise:} Fluctuations in the bias magnetic field $B$ map to frequency instability via the second-order Zeeman shift \cite{Vanier1989}:
+    \begin{equation}
+    \sigma_B(\tau) = \frac{2 K_Z B \sigma_{B,rms}}{\nu_0} \tau^{-1/2}
+    \end{equation}
+    where $K_Z = 575.152$~Hz/G$^2$ and $\sigma_{B,rms}$ is the rms magnetic field fluctuation at 1~s integration.
+    \item \textbf{Electronics / Detector Noise:} The detection noise is limited by the Noise Equivalent Power (NEP) of the photodetector \cite{Knappe2004}:
+    \begin{equation}
+    \sigma_{elec}(\tau) = \frac{1}{\nu_0} \frac{\gamma_{CPT}}{2 C P_{det}} \text{NEP} \cdot \tau^{-1/2}
+    \end{equation}
+    \item \textbf{Long-Term Frequency Drift:} Determining the deterministic contribution from a linear fractional frequency drift rate $A$ \cite{Steck2021, Riley2008}:
+    \begin{equation}
+    \sigma_{drift}(\tau) = \frac{A}{\sqrt{2}} \tau
+    \end{equation}
+\end{itemize}
+Note: The Dick effect, linked to dead-time in pulsed systems, is negligible for this CW clock.
+
+\section{Aging and Long-Term Drift}
+Linear frequency drift $A$ is modeled from first principles \cite{Marlow2021}:
+\begin{itemize}
+    \item \textbf{Helium Permeation:} $\frac{dP_{He}}{dt} = (K(T) S / V d) P_{He,atmos}$. Borosilicate glass allows slow accumulation of Helium, causing a systematic drift \cite{Knappe2004}.
+    \item \textbf{VCSEL Aging:} Long-term drift in laser current and wavelength affects the AC Stark shift.
+    \item \textbf{Rb Reactivity:} Slow chemical depletion of Rubidium via wall interactions.
+\end{itemize}
+
+\begin{thebibliography}{99}
+\bibitem{Steck2021} D. A. Steck, "Rubidium 87 D Line Data", revision 2.2.2 (2021). URL: \url{https://steck.us/alkalidata/rubidium87numbers.pdf}
+\bibitem{Alcock1984} C. B. Alcock, V. P. Itkin, and M. K. Horrigan, "Vapour Pressure Equations for the Metallic Elements: 298--2500K", Can. Metall. Q. 23, 309-313 (1984). DOI: \href{https://doi.org/10.1179/cmq.1984.23.3.309}{10.1179/cmq.1984.23.3.309}
+\bibitem{Bouchiat1966} M. A. Bouchiat and J. Brossel, "Relaxation of Optically Pumped Rb Atoms on Paraffin-Coated Walls", Phys. Rev. 147, 41 (1966). DOI: \href{https://doi.org/10.1103/PhysRev.147.41}{10.1103/PhysRev.147.41}
+\bibitem{Franz1976} F. A. Franz and C. Volk, "Spin-relaxation of rubidium atoms in sudden collisions", Phys. Rev. A 14, 1711--1728 (1976). DOI: \href{https://doi.org/10.1103/PhysRevA.14.1711}{10.1103/PhysRevA.14.1711}
+\bibitem{Vanier1989} J. Vanier and C. Audoin, \textit{The Quantum Physics of Atomic Frequency Standards} (Adam Hilger, Bristol, 1989). DOI: \href{https://doi.org/10.1201/9781003041085}{10.1201/9781003041085}
+\bibitem{Vanier2005} J. Vanier, "Atomic clocks based on coherent population trapping: a review", Appl. Phys. B 81, 421--442 (2005). DOI: \href{https://doi.org/10.1007/s00340-005-1905-3}{10.1007/s00340-005-1905-3}
+\bibitem{Zhu1993} M. Zhu and L. S. Cutler, "Theoretical and experimental study of coherent population trapping resonance", Proc. 25th PTTI (1993).
+\bibitem{Knappe2004} S. Knappe, L. Hollberg, and J. Kitching, "Dark-line atomic resonances in submillimeter structures", Opt. Lett. 29, 388 (2004). DOI: \href{https://doi.org/10.1364/OL.29.000388}{10.1364/OL.29.000388}
+\bibitem{Kozlova2011} O. Kozlova et al., "Compact CPT Rb frequency standard: characterization and improvements", Proc. Eur. Freq. Time Forum (2011).
+\bibitem{Shah2010} V. Shah and J. Kitching, "Advances in Coherent Population Trapping for Atomic Clocks", Adv. At. Mol. Opt. Phys. 59, 21--74 (2010). DOI: \href{https://doi.org/10.1016/S1049-250X(10)59002-5}{10.1016/S1049-250X(10)59002-5}
+\bibitem{Wynands1999} R. Wynands and A. Nagel, "Precision spectroscopy with coherent dark states", Appl. Phys. B 68, 1 (1999). DOI: \href{https://doi.org/10.1007/s003400050581}{10.1007/s003400050581}
+\bibitem{Audoin1998} C. Audoin et al., "Properties of an oscillator slaved to a periodically interrogated atomic resonator", IEEE Trans. UFFC 45, 877 (1998). DOI: \href{https://doi.org/10.1109/58.710546}{10.1109/58.710546}
+\bibitem{Camparo1999} J. C. Camparo and J. G. Coffer, "Conversion of laser phase noise to amplitude noise in an optically thick vapor", Phys. Rev. A 59, 728 (1999). DOI: \href{https://doi.org/10.1103/PhysRevA.59.728}{10.1103/PhysRevA.59.728}
+\bibitem{Allard2004} F. Allard et al., "Effect of a buffer gas on the spin-exchange shift for CPT clocks", Phys. Rev. A 70, 012513 (2004). DOI: \href{https://doi.org/10.1103/PhysRevA.70.012513}{10.1103/PhysRevA.70.012513}
+\bibitem{Bize1999} S. Bize et al., "High-accuracy measurement of the $^{87}$Rb ground-state hyperfine splitting", Europhys. Lett. 45, 558 (1999). DOI: \href{https://doi.org/10.1209/epl/i1999-00203-9}{10.1209/epl/i1999-00203-9}
+\bibitem{Moreno2018} W. Moreno et al., "Barometric effect in vapor-cell atomic clocks", IEEE Trans. UFFC 65, 1500 (2018). DOI: \href{https://doi.org/10.1109/TUFFC.2018.2834377}{10.1109/TUFFC.2018.2834377}
+\bibitem{Riley2008} W. J. Riley, \textit{Handbook of Frequency Stability Analysis}, NIST Special Publication 1065 (2008). 
+\bibitem{Marlow2021} J. Marlow and J. Scherer, "A Review of Commercial and Emerging Atomic Frequency Standards", Tech. Rep., MITRE Corp. (2021).
+\end{thebibliography}
+
+\end{document}
