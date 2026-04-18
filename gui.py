@@ -51,26 +51,28 @@ BTN_FG    = "#ffffff"
 BTN_ACT   = "#1976d2"
 
 NOISE_COLORS = {
-    "sigma_shot":  ACC_CYAN,
-    "sigma_rin":   ACC_GREEN,
-    "sigma_fm":    ACC_GOLD,
-    "sigma_dick":  ACC_PURPLE,
-    "sigma_T":     "#ff8a65",
-    "sigma_B":     "#80deea",
-    "sigma_elec":  "#b0bec5",
-    "sigma_drift": ACC_RED,
-    "sigma_total": "#ffffff",
+    "sigma_shot":    ACC_CYAN,
+    "sigma_rin":    ACC_GREEN,
+    "sigma_fm":     ACC_GOLD,
+    "sigma_flicker": "#ba68c8",
+    "sigma_dick":   ACC_PURPLE,
+    "sigma_T":      "#ff8a65",
+    "sigma_B":      "#80deea",
+    "sigma_elec":   "#b0bec5",
+    "sigma_drift":  ACC_RED,
+    "sigma_total":  "#ffffff",
 }
 NOISE_LABELS = {
-    "sigma_shot":  "Shot noise",
-    "sigma_rin":   "Laser RIN",
-    "sigma_fm":    "FM noise",
-    "sigma_dick":  "Dick effect",
-    "sigma_T":     "Temp. fluc.",
-    "sigma_B":     "B-field fluc.",
-    "sigma_elec":  "Electronics",
-    "sigma_drift": "Aging drift",
-    "sigma_total": "Total",
+    "sigma_shot":    "Shot noise",
+    "sigma_rin":    "Laser RIN",
+    "sigma_fm":     "FM noise",
+    "sigma_flicker": "Flicker (1/f)",
+    "sigma_dick":   "Dick effect",
+    "sigma_T":      "Temp. fluc.",
+    "sigma_B":      "B-field fluc.",
+    "sigma_elec":   "Electronics",
+    "sigma_drift":  "Aging drift",
+    "sigma_total":  "Total",
 }
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -180,13 +182,30 @@ def plot_lineshape(ax, params, cell_result, cpt_result):
     ax.text(0, half_dip + 0.0005, f"FWHM = {gamma_CPT:.1f} Hz",
             ha="center", va="bottom", color=ACC_GOLD, fontsize=9)
 
-    # Info box — use mathtext for Greek/subscripts
-    info = (r"$\gamma_{CPT}$" + f" = {gamma_CPT:.1f} Hz\n"
-            f"Contrast = {C * 100:.2f}%\n"
-            r"$\gamma_2$" + f" = {cell_result['gamma2_total_Hz']:.1f} Hz\n"
-            f"  diff: {cell_result['gamma_diff_Hz']:.1f} Hz\n"
-            f"  s-e:  {cell_result['gamma_se_Hz']:.1f} Hz\n"
-            f"  buf.: {cell_result['gamma_bg_Hz']:.1f} Hz")
+    # Info box — adapts to both buffer-gas (diffusion) and no-buffer-gas (ballistic) regimes
+    regime = cell_result.get("regime", "diffusion")
+    gamma2 = cell_result["gamma2_total_Hz"]
+    gamma_se = cell_result.get("gamma_se_Hz", 0.0)
+
+    if regime == "ballistic":
+        gamma_wall    = cell_result.get("gamma_wall_Hz", 0.0)
+        gamma_transit = cell_result.get("gamma_transit_Hz", 0.0)
+        info = (r"$\gamma_{CPT}$" + f" = {gamma_CPT:.1f} Hz\n"
+                f"Contrast = {C * 100:.2f}%\n"
+                r"$\gamma_2$" + f" = {gamma2:.1f} Hz  [ballistic]\n"
+                f"  wall:    {gamma_wall:.1f} Hz\n"
+                f"  s-e:     {gamma_se:.1f} Hz\n"
+                f"  transit: {gamma_transit:.0f} Hz  (inhomog.)")
+    else:
+        gamma_diff = cell_result.get("gamma_diff_Hz", 0.0)
+        gamma_bg   = cell_result.get("gamma_bg_Hz", 0.0)
+        info = (r"$\gamma_{CPT}$" + f" = {gamma_CPT:.1f} Hz\n"
+                f"Contrast = {C * 100:.2f}%\n"
+                r"$\gamma_2$" + f" = {gamma2:.1f} Hz  [diffusion]\n"
+                f"  diff:  {gamma_diff:.1f} Hz\n"
+                f"  s-e:   {gamma_se:.1f} Hz\n"
+                f"  buf.:  {gamma_bg:.1f} Hz")
+
     ax.text(0.98, 0.97, info, transform=ax.transAxes,
             ha="right", va="top", fontsize=9, color=FG_DIM,
             bbox=dict(boxstyle="round,pad=0.4", fc=BG_GROUP, ec="#3a3f5c", alpha=0.9))
@@ -429,7 +448,7 @@ class CPTClockApp:
 
     def __init__(self, root: tk.Tk):
         self.root = root
-        root.title("CPT Atomic Clock Performance Model  —  ⁸⁷Rb + Ar/N₂ Buffer Gas")
+        root.title("CPT Atomic Clock Performance Model  —  ⁸⁷Rb (buffer-gas & no-buffer-gas)")
         root.configure(bg=BG_DARK)
         root.geometry("1440x860")
         root.minsize(900, 600)
@@ -661,10 +680,11 @@ class CPTClockApp:
     def _do_run(self):
         p = params_from_entries(self.entries)
 
-        # ── 1. Cell decoherence ──────────────────────────────────────────
+        # ── 1. Cell decoherence  (dispatches to diffusion or ballistic regime) ──
         cell = total_ground_decoherence(
             p["cell_R_m"], p["cell_L_m"],
-            p["P_N2_Torr"], p["P_Ar_Torr"], p["T_K"])
+            p["P_N2_Torr"], p["P_Ar_Torr"], p["T_K"],
+            beam_diam_m=p["beam_diam_mm"] * 1e-3)
 
         # ── 2. CPT signal ────────────────────────────────────────────────
         p["gamma2_Hz"] = cell["gamma2_total_Hz"]
