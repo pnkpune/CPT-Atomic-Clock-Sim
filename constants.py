@@ -5,17 +5,20 @@ Physical constants and 87-Rb specific data for the CPT clock model.
 
 References
 ----------
-[Steck2021]  D. A. Steck, "Rubidium 87 D Line Data", revision 2.2.2 (2021).
-             https://steck.us/alkalidata/rubidium87numbers.pdf
-[Vanier2005] J. Vanier and C. Audoin, "The Quantum Physics of Atomic
-             Frequency Standards", IOP Publishing (2005).
-[Kozlova2011] O. Kozlova et al., "Compact CPT Rb frequency standard:
-               characterization and improvements", Proc. Eur. Freq. Time
-               Forum (2011).
-[Bize1999]   S. Bize et al., Europhys. Lett. 45, 558 (1999).   [BBR shift]
-[Allard2004] F. Allard et al., Phys. Rev. A 70, 012513 (2004). [Se shift]
-[Danos1958]  R. B. Danos & A. M. Ruderman, Phys. Rev. 109, 1036 (1958).
-             [diffusion constants]
+[Steck2021]    D. A. Steck, "Rubidium 87 D Line Data", revision 2.2.2 (2021).
+               https://steck.us/alkalidata/rubidium87numbers.pdf
+[Vanier2005]   J. Vanier and C. Audoin, "The Quantum Physics of Atomic
+               Frequency Standards", IOP Publishing (2005).
+[Boudot2011]   R. Boudot et al., Opt. Express 19, 3106 (2011).
+               [Rb-87 buffer-gas shift coefficients for N2/Ar mixtures]
+[Bize1999]     S. Bize et al., Europhys. Lett. 45, 558 (1999).  [BBR shift]
+[Allard2004]   F. Allard et al., Phys. Rev. A 70, 012513 (2004). [Se shift]
+[Danos1958]    R. B. Danos & A. M. Ruderman, Phys. Rev. 109, 1036 (1958).
+               [diffusion constants]
+[Rotondaro1997] A. D. Rotondaro & G. P. Perram, J. Quant. Spectrosc. Radiat.
+               Transfer 57, 497 (1997). [N2 quenching of Rb excited state]
+[Straessle2014] R. Straessle et al., J. Phys. B 47, 075502 (2014).
+               [anti-relaxation coatings for micro-cells]
 """
 
 import math
@@ -104,6 +107,17 @@ D0_Rb_N2 = 0.154e-4    # [m²/s] at STP  (0.154 cm²/s·atm)
 D0_Rb_Ar = 0.320e-4    # [m²/s] at STP  (0.320 cm²/s·atm)
 
 # ─────────────────────────────────────────────────────────────────────────────
+# SATURATION INTENSITY — D1 line  [Steck2021, Table 7]
+# These are the correct multi-level values including degeneracy factors.
+# I_sat_D1_isotropic : unpolarized / isotropic pump, mF-averaged [Steck2021 Table 7]
+# I_sat_D1_lin       : linearly polarised light (lin||lin CPT geometry) [Steck2021 Table 7]
+# ─────────────────────────────────────────────────────────────────────────────
+I_sat_D1_isotropic = 44.84    # [W/m²]  =  4.484 mW/cm²  [Steck2021, Table 7]
+I_sat_D1_lin       = 16.70    # [W/m²]  =  1.669 mW/cm²  [Steck2021, Table 7]
+# Default used in Rabi formula: lin‖lin polarisation geometry for CPT
+I_sat_D1_CPT       = I_sat_D1_lin
+
+# ─────────────────────────────────────────────────────────────────────────────
 # LIGHT SHIFT (AC STARK SHIFT) — intensity coefficient
 # Δν_LS ≈ alpha_LS * I_total   (linear approximation for moderate power)
 # alpha_LS depends on detuning; typical range for D1 CPT:
@@ -116,3 +130,32 @@ alpha_LS_typ = -1.0e-3   # [Hz / (μW/cm²)] — representative value; sign can 
 # Typical: ~10^-12 per mbar for hard-sealed glass cells
 # ─────────────────────────────────────────────────────────────────────────────
 kappa_baro = 1.0e-12   # [fractional / mbar]  → multiply by nu_hfs for Hz/mbar
+
+# ─────────────────────────────────────────────────────────────────────────────
+# OPTICAL PRESSURE BROADENING COEFFICIENTS  [Vanier2005, sec. 6.2]
+# Lorentzian HWHM broadening of the D1 optical line by buffer gas collisions.
+# Γ_opt_broad(T, P) ≈ 2π × [γ_N2 × P_N2 + γ_Ar × P_Ar]  [in rad/s]
+# Temperature dependence ~(T/T0)^0.3 is weak; ignored here (< 5% over 20–80 °C).
+# ─────────────────────────────────────────────────────────────────────────────
+gamma_opt_N2_Hz_Torr = 17.0e6   # [Hz/Torr]  HWHM optical broadening by N₂  [Vanier2005]
+gamma_opt_Ar_Hz_Torr =  8.0e6   # [Hz/Torr]  HWHM optical broadening by Ar  [Vanier2005]
+
+# ─────────────────────────────────────────────────────────────────────────────
+# N₂ EXCITED-STATE QUENCHING RATE COEFFICIENT  [Rotondaro1997]
+# The excited 5²P₁/₂ state is collisionally quenched by N₂ at rate:
+#   Γ_quench = k_Q_N2 × n_N2   [rad/s]
+# k_Q_N2 is the bimolecular quenching rate constant at ~60 °C.
+# Quenching dramatically increases Γ_hom and reduces optical coherence lifetime.
+# ─────────────────────────────────────────────────────────────────────────────
+k_Q_N2 = 1.4e-10 * 1e-6  # [m³/s]  (converted from 1.4e-10 cm³/s) [Rotondaro1997]
+
+# ─────────────────────────────────────────────────────────────────────────────
+# WALL COLLISION PARAMETERS (no-buffer-gas / anti-relaxation coating cells)
+# [Bouchiat1966; Straessle2014]
+# P_depol_bare    : depolarization probability per wall collision, bare glass
+# P_depol_paraffin: depolarization probability per wall collision, paraffin coating
+# P_depol_PDMS    : depolarization probability per wall collision, PDMS/OTS coating
+# ─────────────────────────────────────────────────────────────────────────────
+P_depol_bare     = 1.0      # bare glass: each collision destroys coherence
+P_depol_paraffin = 1e-3     # paraffin-coated: ~1 in 1000 collisions depolarises
+P_depol_PDMS     = 1e-4     # PDMS / OTS coating: ~1 in 10 000 collisions

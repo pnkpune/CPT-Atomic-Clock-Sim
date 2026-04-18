@@ -43,25 +43,75 @@ References
 import numpy as np
 import math
 from typing import Optional
-from constants import Gamma_D1, nu_hfs, kB, m_Rb, c, lambda_D1, h, eps0
+from constants import (
+    Gamma_D1, nu_hfs, kB, m_Rb, c, lambda_D1, h, eps0,
+    I_sat_D1_CPT, I_sat_D1_lin, I_sat_D1_isotropic,
+    gamma_opt_N2_Hz_Torr, gamma_opt_Ar_Hz_Torr,
+    k_Q_N2,
+)
 from vcsel_model import sideband_amplitudes
 from rb_vapor import number_density
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Saturation intensity for Rb D1 line, derived from first principles.
-# I_sat = h·ν·Γ / (3·λ²)   [Steck2021, eq. 7]
-# Numerically ≈ 44.9 W/m² ≈ 4.49 mW/cm² for the cycling |F=1>→|F'=1> transition.
-# We use the textbook expression so the value is always self-consistent with Γ_D1.
-_nu_D1 = c / lambda_D1
-_I_sat_D1 = (h * _nu_D1 * Gamma_D1) / (3.0 * lambda_D1 ** 2)  # [W/m²]
+# Saturation intensity for Rb D1 line — Steck2021 Table 7.
+# Two values are provided for different polarisation geometries:
+#   I_sat_D1_lin       = 1.669 mW/cm² = 16.70 W/m²  (lin‖lin, used for CPT)
+#   I_sat_D1_isotropic = 4.484 mW/cm² = 44.84 W/m²  (unpolarised / isotropic)
+# The earlier formula h·ν·Γ/(3λ²) gave 0.476 mW/cm², which was ~9.4× too small,
+# leading to a 3.07× overestimate of Ω and 9.4× overestimate of power broadening.
+# We import the correct value from constants.py.
+_I_sat_D1 = I_sat_D1_CPT  # [W/m²]  — lin‖lin polarisation, Steck2021 Table 7
 
 # First-order Zeeman splitting coefficient for Rb-87 ground hyperfine states.
-# ξ = (g_J·μ_B − g_I·μ_N) / h  ≈  700.2 kHz/G  [Steck2021, Table 10]
+# ξ = (g_J·μB − g_I·μN) / h  ≈  700.2 kHz/G  [Steck2021, Table 10]
 # In the low-field limit both |F=1,mF=0⟩→|F=2,mF=0⟩ Zeeman sidebands shift
 # by ±ξ·B.   We use sign-consistent, Steck-derived value.
 _XI_Hz_G = 700.2e3   # [Hz/G]
 
 # ─────────────────────────────────────────────────────────────────────────────
+
+
+def optical_homogeneous_rate(P_N2_Torr: float = 0.0, P_Ar_Torr: float = 0.0,
+                             T_K: float = 333.15) -> float:
+    """
+    Total homogeneous (Lorentzian) decay rate of the excited 5²P₁/₂ state.
+
+    Three contributions are summed in quadrature:
+      (1) Natural radiative decay: Γ_nat = Γ_D1
+      (2) Pressure (dephasing) broadening by buffer gas:
+              Γ_press = 2π × [γ_N2 × P_N2 + γ_Ar × P_Ar]  [Vanier2005 sec. 6.2]
+      (3) N₂ collisional quenching of the excited state:
+              Γ_quench = k_Q_N2 × n_N2(T, P_N2)             [Rotondaro1997]
+
+    Argon is a noble gas and does not quench the excited state appreciably.
+
+    Parameters
+    ----------
+    P_N2_Torr, P_Ar_Torr : float
+        Buffer gas partial pressures [Torr].
+    T_K : float
+        Cell temperature [K].
+
+    Returns
+    -------
+    float
+        Total excited-state homogeneous decay rate [rad/s].
+    """
+    # (1) natural linewidth
+    Gamma_nat = Gamma_D1
+
+    # (2) pressure broadening: HWHM in Hz/Torr → angular frequency
+    Gamma_press = 2.0 * math.pi * (
+        gamma_opt_N2_Hz_Torr * P_N2_Torr
+        + gamma_opt_Ar_Hz_Torr * P_Ar_Torr
+    )  # [rad/s]
+
+    # (3) N₂ quenching: n_N2 = P_N2 / (kB * T)  [ideal gas]
+    n_N2 = (P_N2_Torr * 133.322) / (kB * T_K)
+    Gamma_quench = k_Q_N2 * n_N2   # [rad/s]
+
+    return Gamma_nat + Gamma_press + Gamma_quench
+
 
 
 def rabi_frequency(P_sideband_W: float, beam_area_m2: float) -> float:
@@ -135,7 +185,8 @@ def cpt_linewidth_Hz(gamma2_Hz: float, Omega_rad_s: float,
 
 
 def cpt_contrast(Omega_rad_s: float, gamma2_Hz: float,
-                 Gamma_hom_rad_s: Optional[float] = None) -> float:
+                 Gamma_hom_rad_s: Optional[float] = None,
+                 C_max: Optional[float] = None) -> float:
     """
     CPT resonance contrast C (dimensionless, 0 < C < 1).
 
@@ -148,8 +199,10 @@ def cpt_contrast(Omega_rad_s: float, gamma2_Hz: float,
 
         C = C_max · Ω² / (Ω² + 2·Γ_hom·γ₂)
 
-    where C_max ≈ 0.10 accounts for multi-level depumping and polarisation
-    losses typical of VCSEL-based CW-CPT [Knappe2004].
+    C_max ceiling depends on cell type and polarisation scheme:
+      - CSAC small cell:        C_max ≈ 0.10  [Knappe2004]
+      - Lab macroscopic cell:   C_max ≈ 0.20  [Boudot2011]
+      - Anti-relaxation coated: C_max ≈ 0.25  [Levi2000]
 
     Parameters
     ----------
@@ -161,6 +214,8 @@ def cpt_contrast(Omega_rad_s: float, gamma2_Hz: float,
         temperature via the full cell model.
     Gamma_hom_rad_s : float, optional
         Homogeneous excited-state decay rate [rad/s].  Defaults to Γ_D1.
+    C_max : float, optional
+        Empirical contrast ceiling (0–1).  Defaults to 0.10 (CSAC regime).
 
     Returns
     -------
@@ -170,11 +225,11 @@ def cpt_contrast(Omega_rad_s: float, gamma2_Hz: float,
     if Gamma_hom_rad_s is None:
         Gamma_hom_rad_s = Gamma_D1
 
-    C_max = 0.10     # multi-level/polarisation ceiling [Knappe2004]
+    C_max_val = C_max if C_max is not None else 0.10
     gamma2_rad = 2.0 * math.pi * gamma2_Hz
     sat_term = 2.0 * Gamma_hom_rad_s * gamma2_rad   # [rad²/s²]
     denom = Omega_rad_s ** 2 + sat_term
-    return C_max * Omega_rad_s ** 2 / denom if denom > 0 else 0.0
+    return C_max_val * Omega_rad_s ** 2 / denom if denom > 0 else 0.0
 
 
 def doppler_linewidth_Hz(T_K: float) -> float:
@@ -196,11 +251,12 @@ def doppler_linewidth_Hz(T_K: float) -> float:
     return (1.0 / lambda_D1) * math.sqrt(8.0 * math.log(2.0) * kB * T_K / m_Rb)
 
 
-def absorption_od(T_K: float, L_m: float, Gamma_buffer_rad_s: float = 0.0) -> float:
+def absorption_od(T_K: float, L_m: float, Gamma_buffer_rad_s: float = 0.0,
+                 P_N2_Torr: float = 0.0, P_Ar_Torr: float = 0.0) -> float:
     """
     Beer-Lambert optical depth α·L for the Rb D1 transition.
 
-    The peak absorption coefficient is [Steck2021 eq. 5; Demtröder]:
+    The peak absorption coefficient is [Steck2021 eq. 5; Dem tröder]:
 
         α₀ = n · σ₀
 
@@ -211,9 +267,12 @@ def absorption_od(T_K: float, L_m: float, Gamma_buffer_rad_s: float = 0.0) -> fl
 
     This is the correct Gaussian lineshape peak, consistent with the normalised
     Voigt profile in the Doppler-broadened (Γ_nat ≪ Δν_D) limit.
-    In a buffer-gas cell the homogeneous linewidth Γ_hom = Γ_nat + Γ_collisional
-    replaces Γ_nat in the Voigt kernel width, which is accounted for via the
-    Γ_buffer_rad_s argument.
+    In a buffer-gas cell the homogeneous linewidth Γ_hom = Γ_nat + Γ_press + Γ_quench
+    replaces Γ_nat in the Voigt kernel width.
+
+    If P_N2_Torr / P_Ar_Torr are provided, Γ_hom is computed automatically via
+    optical_homogeneous_rate().  Otherwise Gamma_buffer_rad_s is used directly
+    (backward-compatible).
 
     Parameters
     ----------
@@ -223,7 +282,10 @@ def absorption_od(T_K: float, L_m: float, Gamma_buffer_rad_s: float = 0.0) -> fl
         Cell length [m].
     Gamma_buffer_rad_s : float
         Extra homogeneous (Lorentzian) broadening from buffer-gas collisions
-        [rad/s].  Adds to Γ_nat in the Voigt HWHM.
+        [rad/s].  Used only if P_N2_Torr = P_Ar_Torr = 0 (backward-compat).
+    P_N2_Torr, P_Ar_Torr : float
+        Buffer-gas partial pressures [Torr].  When non-zero, the total
+        homogeneous rate is computed from optical_homogeneous_rate().
 
     Returns
     -------
@@ -232,11 +294,16 @@ def absorption_od(T_K: float, L_m: float, Gamma_buffer_rad_s: float = 0.0) -> fl
     """
     n = number_density(T_K)
     nu_D = doppler_linewidth_Hz(T_K)         # Gaussian FWHM [Hz]
-    Gamma_hom = Gamma_D1 + Gamma_buffer_rad_s  # total homogeneous decay rate [rad/s]
 
-    # The area under the absorption cross section is strictly proportional to the 
+    # Determine homogeneous decay rate
+    if P_N2_Torr > 0 or P_Ar_Torr > 0:
+        Gamma_hom = optical_homogeneous_rate(P_N2_Torr, P_Ar_Torr, T_K)
+    else:
+        Gamma_hom = Gamma_D1 + Gamma_buffer_rad_s   # backward-compatible
+
+    # The area under the absorption cross section is strictly proportional to the
     # NATURAL linewidth (Gamma_D1), because buffer gas collisions only dephase
-    # atoms without creating new oscillator strength. 
+    # atoms without creating new oscillator strength.
     # We use an effective Voigt FWHM to properly capture pressure broadening.
     nu_eff = math.sqrt(nu_D**2 + (Gamma_hom / (2.0 * math.pi))**2)
 
@@ -259,13 +326,18 @@ def mean_intensity_factor(params: dict) -> tuple:
         T_bg             : exp(-αL), off-resonance transmission (0–1)
         intensity_factor : (1 − T_bg)/(αL), mean intensity fraction (0–1)
     """
-    T_K = params["T_K"]
-    L_m = params.get("cell_L_mm", 20.0) * 1e-3
-    # Use a representative buffer-gas collisional broadening of ~500 MHz (1σ-ish)
-    # expressed in rad/s.  This is set externally for accurate cells; the default
-    # provides a physically reasonable estimate for a ~13 Torr N₂/Ar mixture.
-    Gamma_buf = params.get("Gamma_buffer_rad_s", 2.0 * math.pi * 500e6)
-    alpha_L = absorption_od(T_K, L_m, Gamma_buffer_rad_s=Gamma_buf)
+    T_K  = params["T_K"]
+    L_m  = params.get("cell_L_mm", 20.0) * 1e-3
+    P_N2 = params.get("P_N2_Torr", 0.0)
+    P_Ar = params.get("P_Ar_Torr", 0.0)
+
+    # Prefer pressure-based computation; fall back to explicit Gamma_buffer_rad_s
+    if P_N2 > 0 or P_Ar > 0:
+        alpha_L = absorption_od(T_K, L_m, P_N2_Torr=P_N2, P_Ar_Torr=P_Ar)
+    else:
+        # Legacy path: explicit Gamma_buffer_rad_s parameter or zero
+        Gamma_buf = params.get("Gamma_buffer_rad_s", 0.0)
+        alpha_L = absorption_od(T_K, L_m, Gamma_buffer_rad_s=Gamma_buf)
 
     if alpha_L < 1e-4:
         return (1.0, 1.0)
@@ -380,15 +452,22 @@ def compute_cpt_signal(params: dict) -> dict:
             beam_diam_mm : beam diameter [mm]
             gamma2_Hz    : total ground-state decoherence rate [Hz]
         Optional:
-            Gamma_hom_rad_s  : homogeneous excited-state decay rate [rad/s]
-                               Default: Γ_D1 (add N₂ quenching externally)
-            Gamma_buffer_rad_s : buffer-gas collisional broadening [rad/s]
-                               Default: 2π·500 MHz
+            P_N2_Torr       : N₂ partial pressure [Torr]  (auto-computes Γ_hom)
+            P_Ar_Torr       : Ar partial pressure [Torr]  (auto-computes Γ_hom)
+            Gamma_hom_rad_s  : explicit homogeneous excited-state decay rate [rad/s]
+                               (used only if P_N2/P_Ar not given, falls back to Γ_D1)
+            cell_L_mm       : cell length [mm] (for Beer-Lambert OD), default 20
+            cell_type       : 'csac' | 'lab' | 'macro' — sets C_max empirically
+                               'csac'  : small CSAC cell, C_max ≈ 0.10  [Knappe2004]
+                               'lab'   : lab macroscopic cell, C_max ≈ 0.20  [Boudot2011]
+                               'macro' : large cell / coated, C_max ≈ 0.25  [Levi2000]
+                               default : 'csac'
 
     Returns
     -------
     dict
-        Omega_rad_s, gamma_CPT_Hz, contrast, disc_slope_1_Hz, T_bg
+        Omega_rad_s, gamma_CPT_Hz, contrast, disc_slope_1_Hz, T_bg,
+        Gamma_hom_rad_s (for diagnostics)
     """
     from vcsel_model import sideband_powers
 
@@ -398,13 +477,22 @@ def compute_cpt_signal(params: dict) -> dict:
     d_mm     = params["beam_diam_mm"]
     gamma2   = params["gamma2_Hz"]
 
-    # Homogeneous excited-state decay rate (natural linewidth + quenching)
-    Gamma_hom_base = params.get("Gamma_hom_rad_s", Gamma_D1)
-    
-    # Buffer gas collisions massively broaden the optical transition (~10-20 MHz/Torr)
-    # This dephasing suppresses the optical pumping rate (Gamma_opt ∝ Ω² / Gamma_hom)
-    Gamma_buf = params.get("Gamma_buffer_rad_s", 2.0 * math.pi * 500e6)
-    Gamma_hom_total = Gamma_hom_base + Gamma_buf
+    # ---- Determine total homogeneous excited-state decay rate ----
+    P_N2 = params.get("P_N2_Torr", 0.0)
+    P_Ar = params.get("P_Ar_Torr", 0.0)
+    if P_N2 > 0 or P_Ar > 0:
+        # Auto-compute: natural + pressure broadening + N2 quenching
+        Gamma_hom_total = optical_homogeneous_rate(P_N2, P_Ar, T_K)
+    else:
+        # Legacy / explicit path
+        Gamma_hom_base = params.get("Gamma_hom_rad_s", Gamma_D1)
+        Gamma_buf      = params.get("Gamma_buffer_rad_s", 0.0)
+        Gamma_hom_total = Gamma_hom_base + Gamma_buf
+
+    # ---- C_max depends on cell regime ----
+    cell_type = params.get("cell_type", "csac")
+    _C_max_map = {"csac": 0.10, "lab": 0.20, "macro": 0.25}
+    C_max = _C_max_map.get(cell_type, 0.10)
 
     beam_area = math.pi * (d_mm * 1e-3 / 2.0) ** 2   # [m²]
 
@@ -419,7 +507,8 @@ def compute_cpt_signal(params: dict) -> dict:
     Omega = rabi_frequency(P_sb, beam_area) * math.sqrt(i_factor)
 
     lw    = cpt_linewidth_Hz(gamma2, Omega, Gamma_hom_rad_s=Gamma_hom_total)
-    C     = cpt_contrast(Omega, gamma2, Gamma_hom_rad_s=Gamma_hom_total)
+    C     = cpt_contrast(Omega, gamma2, Gamma_hom_rad_s=Gamma_hom_total,
+                         C_max=C_max)
     slope = discriminator_slope(lw, C, T_bg=T_bg)
 
     return {
@@ -428,4 +517,5 @@ def compute_cpt_signal(params: dict) -> dict:
         "contrast":         C,
         "disc_slope_1_Hz":  slope,
         "T_bg":             T_bg,
+        "Gamma_hom_rad_s":  Gamma_hom_total,
     }

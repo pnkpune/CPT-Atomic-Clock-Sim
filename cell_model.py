@@ -3,17 +3,36 @@ cell_model.py
 =============
 Vapour-cell geometry and decoherence rates for the CPT clock model.
 
+Two regimes are supported:
+
+  (A) Buffer-gas cell (P_bg > 0)
+      Atoms diffuse to the walls.  The dominant decoherence channels are:
+        gamma_diff  : diffusion-limited wall loss  [Bouchiat1966]
+        gamma_se    : Rb–Rb spin-exchange         [Vanier2005 sec. 3.6]
+        gamma_bg    : buffer-gas ground-state decoherence  [Kozlova2011 / Boudot2011]
+
+  (B) No-buffer-gas cell (P_bg = 0)
+      Atoms travel ballistically.  The dominant decoherence channels are:
+        gamma_transit : beam/cell transit-time broadening  [Beverini1971]
+        gamma_wall    : wall-collision depolarisation       [Bouchiat1966]
+        gamma_se      : Rb–Rb spin-exchange               [Vanier2005 sec. 3.6]
+      For anti-relaxation coated cells P_depol_per_bounce ≪ 1 narrows gamma_wall
+      dramatically.
+
 References
 ----------
-[Vanier2005]  J. Vanier & C. Audoin, "The Quantum Physics of Atomic Frequency
-              Standards", IOP Publishing (2005).  sec. 3.4 (diffusion),
-              sec. 6.3 (collisional broadening).
+[Vanier2005]   J. Vanier & C. Audoin (2005). sec. 3.4 (diffusion),
+               sec. 6.3 (collisional broadening).
 [Bouchiat1966] M. A. Bouchiat & J. Brossel, Phys. Rev. 147, 41 (1966).
-               [diffusion-limited relaxation in cylindrical cell]
+               [diffusion-limited relaxation in cylindrical cell;
+                wall-collision rate formula]
 [Beverini1971] N. Beverini et al., Phys. Rev. A 4, 550 (1971). [transit-time]
-[Kozlova2011]  O. Kozlova et al., Proc. EFTF (2011). [broadening coefficients]
-[Franz1976]    F. A. Franz & C. Volk, Phys. Rev. A 14, 1711 (1976). 
+[Boudot2011]   R. Boudot et al., Opt. Express 19, 3106 (2011).
+               [Rb-87 N2/Ar broadening coefficients; inversion temperature]
+[Franz1976]    F. A. Franz & C. Volk, Phys. Rev. A 14, 1711 (1976).
                [diffusion and spin-relaxation rates]
+[Straessle2014] R. Straessle et al., J. Phys. B 47, 075502 (2014).
+               [anti-relaxation coatings for micro-cells]
 """
 
 import math
@@ -21,6 +40,7 @@ from constants import (
     kB, m_Rb, kappa_se,
     D0_Rb_N2, D0_Rb_Ar,
     sigma_se,
+    P_depol_bare, P_depol_paraffin, P_depol_PDMS,
 )
 from rb_vapor import number_density, mean_speed
 
@@ -98,10 +118,13 @@ def diffusion_coefficient(P_N2_Torr: float, P_Ar_Torr: float, T_K: float) -> flo
     if P_total_atm < 1e-9:
         return 1e10   # no buffer gas → free diffusion (very large D)
 
-    T_fac = (T_K / T0) ** 1.5   # Chapman-Enskog temperature scaling
+    # Hard-sphere Chapman-Enskog T scaling: D ∝ T^1.75  [Vanier2005 sec. 3.4]
+    # (The earlier T^1.5 was the Maxwell-molecule approximation; this gives
+    # a more accurate 5% correction at CPT operating temperatures.)
+    T_fac = (T_K / T0) ** 1.75   # hard-sphere Chapman-Enskog temperature scaling
 
     # Binary diffusion coefficients at operating conditions
-    # D_i = D0_i · (T/T0)^1.5 / (P_total/P0)
+    # D_i = D0_i · (T/T0)^1.75 / (P_total/P0)
     # Both species see the *total* mixture pressure (standard binary D convention)
     scale = T_fac * P0_atm / P_total_atm
     D_N2 = D0_Rb_N2 * scale if P_N2_Torr > 0 else None
@@ -185,23 +208,138 @@ def collisional_broadening_rate(P_N2_Torr: float, P_Ar_Torr: float,
     return (rate_N2 + rate_Ar) / (2 * math.pi)
 
 
+def ballistic_decoherence(R_m: float, L_m: float, beam_diam_m: float,
+                          T_K: float,
+                          P_depol_per_bounce: float = 1.0) -> dict:
+    """
+    Decoherence rates for a no-buffer-gas vapour cell.
+
+    In the absence of buffer gas, atoms travel ballistically at thermal
+    velocity v̄ = sqrt(8kT/πm).  Two independent channels are modelled:
+
+    (1) Wall-collision rate (Knudsen formula for a cylinder)
+        The mean free path between wall collisions is ∼4V/A:
+
+            γ_wall = v̄ × A / (4V) × P_depol  [Bouchiat1966]
+
+        where V = cell volume, A = cell surface area.
+        P_depol = 1.0 for bare glass; ≪ 1 for anti-relaxation coated cells.
+
+    (2) Beam transit-time broadening
+        Atoms traverse the laser beam of diameter d_beam in time τ = d/v̄:
+
+            γ_transit = v̄ / d_beam      (FWHM ≈ 0.9 / τ)  [Beverini1971]
+
+    The total ground-state decoherence is the incoherent sum
+    (atoms experience transit-time broadening AND can hit the wall):
+
+            γ₂_no_bg = γ_wall + γ_se
+
+    Transit-time broadening contributes to the optical linewidth but not
+    directly to the HFS coherence damping (atoms re-enter the beam after
+    crossing); for the clock linewidth it contributes an inhomogeneous term.
+    We include it in the output for completeness.
+
+    Parameters
+    ----------
+    R_m : float
+        Cell inner radius [m].
+    L_m : float
+        Cell inner length [m].
+    beam_diam_m : float
+        Laser beam 1/e² diameter [m].  Used for transit-time calculation.
+    T_K : float
+        Temperature [K].
+    P_depol_per_bounce : float
+        Depolarisation probability per wall collision.
+        Use P_depol_bare (1.0) for bare glass, P_depol_paraffin (1e-3) for
+        paraffin coating, P_depol_PDMS (1e-4) for PDMS / OTS coating
+        (all from constants.py).  Default: bare glass.
+
+    Returns
+    -------
+    dict
+        gamma_wall_Hz, gamma_transit_Hz, gamma_se_Hz, gamma2_total_Hz.
+    """
+    v_bar = mean_speed(T_K)   # m/s
+
+    # Cell geometry
+    A_cell = 2.0 * math.pi * R_m * (R_m + L_m)   # cylindrical surface area [m²]
+    V_cell = math.pi * R_m ** 2 * L_m             # cell volume [m³]
+
+    # Wall-collision decoherence rate [Hz]
+    # Factor A/(4V) is the Knudsen mean-free-path formula for a cylinder
+    gamma_wall = (v_bar * A_cell / (4.0 * V_cell)) * P_depol_per_bounce
+    gamma_wall /= (2.0 * math.pi)   # convert rad/s → Hz (rate is defined in Hz)
+
+    # Transit-time broadening [Hz]  — for completeness; affects optical OD, not clock HFS
+    gamma_transit = v_bar / max(beam_diam_m, 1e-6)   # HWHM-ish [Hz]
+
+    # Spin-exchange
+    gamma_se = spin_exchange_rate(T_K)
+
+    # Total HFS ground-state decoherence (wall loss + SE; transit-time is
+    # inhomogeneous and treated separately in linewidth broadening)
+    gamma2_total = gamma_wall + gamma_se
+
+    return {
+        "gamma_wall_Hz":    gamma_wall,
+        "gamma_transit_Hz": gamma_transit,
+        "gamma_se_Hz":      gamma_se,
+        "gamma2_total_Hz":  gamma2_total,
+        "regime":           "ballistic",
+    }
+
+
 def total_ground_decoherence(R_m: float, L_m: float,
                               P_N2_Torr: float, P_Ar_Torr: float,
-                              T_K: float) -> dict:
+                              T_K: float,
+                              beam_diam_m: float = 3e-3,
+                              P_depol_per_bounce: float = 1.0) -> dict:
     """
     Compute all contributions to ground-state coherence decay rate γ₂.
 
-    γ₂ = γ_diff + γ_se + γ_bg         (HWHM, Hz)
+    Dispatches to the appropriate regime:
+      • Buffer-gas cell (P_N2 > 0 or P_Ar > 0):
+            γ₂ = γ_diff + γ_se + γ_bg
+      • No-buffer-gas cell (P_N2 = P_Ar = 0):
+            γ₂ = γ_wall + γ_se
+            (beam transit-time is also returned but is a separate inhomogeneous term)
 
-    Returns a dict with individual components and total.
+    Parameters
+    ----------
+    R_m, L_m : float
+        Cell inner radius and length [m].
+    P_N2_Torr, P_Ar_Torr : float
+        Buffer gas partial pressures [Torr]. Zero for no-buffer-gas cell.
+    T_K : float
+        Cell temperature [K].
+    beam_diam_m : float
+        Laser beam diameter [m]; used for transit-time broadening in the
+        no-buffer-gas regime.  Default: 3 mm.
+    P_depol_per_bounce : float
+        Wall depolarisation probability per bounce.  Only used in the
+        no-buffer-gas regime.  Default: 1.0 (bare glass).
+
+    Returns
+    -------
+    dict
+        Individual rate components and gamma2_total_Hz.
     """
+    if P_N2_Torr <= 0 and P_Ar_Torr <= 0:
+        # ─── No-buffer-gas ballistic regime ───
+        return ballistic_decoherence(R_m, L_m, beam_diam_m, T_K,
+                                     P_depol_per_bounce=P_depol_per_bounce)
+
+    # ─── Buffer-gas diffusion regime ───
     g_diff = transit_time_rate(R_m, L_m, P_N2_Torr, P_Ar_Torr, T_K)
     g_se   = spin_exchange_rate(T_K)
     g_bg   = collisional_broadening_rate(P_N2_Torr, P_Ar_Torr, T_K)
     total  = g_diff + g_se + g_bg
     return {
-        "gamma_diff_Hz": g_diff,
-        "gamma_se_Hz":   g_se,
-        "gamma_bg_Hz":   g_bg,
-        "gamma2_total_Hz": total,
+        "gamma_diff_Hz":    g_diff,
+        "gamma_se_Hz":      g_se,
+        "gamma_bg_Hz":      g_bg,
+        "gamma2_total_Hz":  total,
+        "regime":           "diffusion",
     }

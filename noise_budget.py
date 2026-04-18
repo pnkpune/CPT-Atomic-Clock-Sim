@@ -391,6 +391,47 @@ def electronics_noise_sigma(
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# 7b. FLICKER NOISE FLOOR  [Vanier2005, sec. 5.3; Riley2008]
+# ─────────────────────────────────────────────────────────────────────────────
+
+def flicker_noise_sigma(
+    tau: np.ndarray,
+    sigma_y_floor: float,
+) -> np.ndarray:
+    """
+    Fractional frequency instability from the combined flicker (1/f) noise floor.
+
+    Sources of flicker noise in a CPT clock:
+      - Laser frequency flicker noise (1/f) converted to amplitude noise via
+        the dispersive absorption profile (Camparo effect at non-zero detuning)
+      - Buffer-gas desorption / adsorption flicker (pressure fluctuations)
+      - Electronic 1/f noise in amplifiers and ADCs
+      - VCSEL RIN flicker noise near DC
+
+    The combined effect produces a τ-independent (flat) Allan deviation floor
+    for intermediate averaging times, typically at 10⁻¹³ – 10⁻¹² for Rb CSACs.
+    For a pure flicker frequency noise process: σ_y(τ) = √(2·ln(2)·h₋₁)
+    where h₋₁ is the flicker noise coefficient [Riley2008, Table 2.1].
+    Here we parameterise directly as the observed floor level.
+
+    Parameters
+    ----------
+    tau : np.ndarray
+        Averaging times [s].
+    sigma_y_floor : float
+        Flat fractional frequency instability floor [dimensionless].
+        Typical values: 1e-13 – 5e-12 for Rb CSAC / CPT clocks.
+
+    Returns
+    -------
+    np.ndarray
+        σ_y,flicker(τ)  — τ-independent (flat) contribution.
+    """
+    tau = np.asarray(tau, dtype=float)
+    return np.full_like(tau, sigma_y_floor, dtype=float)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # LONG-TERM DRIFT MODEL
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -575,7 +616,13 @@ def total_noise_budget(tau: np.ndarray, params: dict) -> dict:
         tau, pc["B_Gauss"], pc["sigma_B_uG"])
     sigma_elec  = electronics_noise_sigma(
         tau, pc["NEP_W_rtHz"], pc["P_det_W"], pc["gamma_CPT_Hz"], pc["contrast"])
-    
+
+    # Flicker noise floor (1/f, τ-independent) — laser frequency jitter,
+    # buffer-gas desorption flicker, electronics 1/f noise.
+    # Default 5×10⁻¹³ for a well-engineered CPT clock; set to 0 to disable.
+    sigma_flicker = flicker_noise_sigma(
+        tau, pc.get("sigma_y_flicker_floor", 5e-13))
+
     if "glass_thickness_mm" in pc:
         drift_he = helium_permeation_drift(
             pc["cell_R_m"], pc["cell_L_m"], pc["glass_thickness_mm"]*1e-3, pc["T_K"]
@@ -588,19 +635,21 @@ def total_noise_budget(tau: np.ndarray, params: dict) -> dict:
 
     sigma_drift = long_term_drift_sigma(tau, drift_rate)
 
-    sigma_total = np.sqrt(sigma_shot**2  + sigma_rin**2   + sigma_fm**2   +
-                          sigma_pm_am**2 + sigma_dick_cw**2  + sigma_T**2      +
-                          sigma_B**2    + sigma_elec**2  + sigma_drift**2)
+    sigma_total = np.sqrt(sigma_shot**2  + sigma_rin**2     + sigma_fm**2     +
+                          sigma_pm_am**2 + sigma_flicker**2 + sigma_dick_cw**2 +
+                          sigma_T**2     + sigma_B**2        + sigma_elec**2   +
+                          sigma_drift**2)
 
     return {
-        "sigma_shot":   sigma_shot,
-        "sigma_rin":    sigma_rin,
-        "sigma_fm":     sigma_fm,
-        "sigma_pm_am":  sigma_pm_am,
-        "sigma_dick":   sigma_dick_cw,
-        "sigma_T":      sigma_T,
-        "sigma_B":      sigma_B,
-        "sigma_elec":   sigma_elec,
-        "sigma_drift":  sigma_drift,
-        "sigma_total":  sigma_total,
+        "sigma_shot":    sigma_shot,
+        "sigma_rin":     sigma_rin,
+        "sigma_fm":      sigma_fm,
+        "sigma_pm_am":   sigma_pm_am,
+        "sigma_flicker": sigma_flicker,
+        "sigma_dick":    sigma_dick_cw,
+        "sigma_T":       sigma_T,
+        "sigma_B":       sigma_B,
+        "sigma_elec":    sigma_elec,
+        "sigma_drift":   sigma_drift,
+        "sigma_total":   sigma_total,
     }
